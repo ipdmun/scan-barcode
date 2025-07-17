@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>입고 스캐너</title>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 2rem; }
+    input { font-size: 1.5rem; padding: 0.5rem; width: 80%; }
+    button { font-size: 1.2rem; padding: 0.5rem 1rem; margin-top: 1rem; }
+    #result { margin-top: 2rem; font-size: 1.3rem; white-space: pre-line; }
+    #reader { width: 100%; margin: auto; }
+  </style>
+</head>
+<body>
+  <h2>📦 입고 스캐너</h2>
+  <div id="reader"></div>
+  <input type="text" id="barcode" placeholder="바코드 입력 또는 스캔" autofocus />
+  <br />
+  <button onclick="handleSubmit()">입력</button>
+  <div id="result"></div>
+
+  <script>
+    // 카메라로 바코드 스캔
+    function onScanSuccess(decodedText) {
+      document.getElementById("barcode").value = decodedText;
+      handleSubmit();
+    }
+
+    const html5QrcodeScanner = new Html5QrcodeScanner("reader", {
+      fps: 10,
+      qrbox: 250
+    });
+    html5QrcodeScanner.render(onScanSuccess);
+
+    // 음성 안내
+    function speak(text) {
+      const msg = new SpeechSynthesisUtterance(text);
+      msg.lang = 'ko-KR';
+      speechSynthesis.speak(msg);
+    }
+
+    // 바코드 전송
+    function handleSubmit() {
+      const barcode = document.getElementById("barcode").value.trim();
+      if (!barcode) return;
+
+      fetch(`https://script.google.com/macros/s/AKfycbzkMBIZkxl6jTMugWYUxDiiz9MP-L7RikCpNnnkjOeZ166jbTZhxdNgOPsLoeG7-jOT/exec?barcode=${barcode}`)
+        .then(res => res.json())
+        .then(data => {
+          const resultDiv = document.getElementById("result");
+          if (data.found) {
+            const text = `✅ ${data.center} 센터\n입고 예정일: ${data.date}\nSKU명: ${data.sku}\n납품수량: ${data.deliveryQty}개`;
+            resultDiv.innerText = text;
+            speak(`${data.center} 센터, 입고 예정일 ${data.date}, SKU ${data.sku}, 납품수량 ${data.deliveryQty}개`);
+          } else {
+            resultDiv.innerText = `❌ 바코드 없음`;
+            speak("해당 바코드를 찾을 수 없습니다");
+          }
+          document.getElementById("barcode").value = "";
+        });
+    }
+  </script>
+</body>
+</html>
