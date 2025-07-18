@@ -1,95 +1,80 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html>
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>입고 스캐너</title>
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 1em;
-      text-align: center;
-    }
-    #reader {
-      width: 100%;
-      max-width: 400px;
-      margin: auto;
-    }
-    #result {
-      margin-top: 1em;
-      font-size: 1.2em;
-      white-space: pre-line;
-    }
+    body { font-family: sans-serif; text-align: center; padding: 1rem; }
+    #reader { width: 100%; max-width: 400px; margin: 0 auto; }
+    input, button { font-size: 1.2rem; padding: 0.5rem; width: 80%; margin-top: 1rem; }
+    #result { margin-top: 2rem; font-size: 1.2rem; white-space: pre-line; }
   </style>
 </head>
 <body>
-  <h2>📦 입고 바코드 스캐너</h2>
+  <h2>📦 입고 스캐너</h2>
   <div id="reader"></div>
-  <div id="result">스캔하면 입고정보를 읽어줍니다</div>
+  <input type="text" id="barcode" placeholder="바코드 수동 입력" />
+  <br />
+  <button onclick="handleSubmit()">입력</button>
+  <div id="result"></div>
 
   <script>
-    let lastScanned = "";
-    let scanCount = 0;
+    let speakCount = 0;
 
     function speak(text) {
+      if (speakCount >= 2) return;
       const msg = new SpeechSynthesisUtterance(text);
       msg.lang = 'ko-KR';
-      speechSynthesis.cancel();
       speechSynthesis.speak(msg);
+      speakCount++;
     }
 
-    function handleScannedBarcode(barcode) {
-      if (barcode !== lastScanned) {
-        lastScanned = barcode;
-        scanCount = 0;
-      }
-
-      if (scanCount >= 2) return;
-      scanCount++;
-
+    function handleBarcode(barcode) {
+      speakCount = 0;
       fetch(`https://script.google.com/macros/s/AKfycby-FnENdO0xe3Sp9JtguVgchmvsnSmBe97rVe49QWildLiQ_APmmH4qEqHTgn0IqJmi/exec?barcode=${barcode}`)
-        .then((res) => res.json())
-        .then((data) => {
+        .then(res => res.json())
+        .then(data => {
           const resultDiv = document.getElementById("result");
-
-          if (data.found && data.matches.length > 0) {
-            let text = `✅ SKU명: ${data.sku}\n`;
-            text += data.matches.map(match =>
-              `📍 ${match.center} 센터\n📅 입고 예정일: ${match.date}\n📦 납품수량: ${match.qty}개\n`
-            ).join("\n");
-
+          if (data.found) {
+            const text = `✅ ${data.center} 센터\n입고 예정일: ${data.date}\nSKU명: ${data.sku}\n납품수량: ${data.deliveryQty}개`;
             resultDiv.innerText = text;
-
-            // 첫 번째 항목만 음성으로 안내
-            const first = data.matches[0];
-            speak(`${first.center} 센터, 입고 예정일 ${first.date}, 납품수량 ${first.qty}개, 상품: ${data.sku}`);
+            speak(`${data.center} 센터, 입고 예정일 ${data.date}, SKU ${data.sku}, 납품수량 ${data.deliveryQty}개`);
           } else {
             resultDiv.innerText = "❌ 바코드 없음";
             speak("해당 바코드를 찾을 수 없습니다");
           }
-        })
-        .catch((err) => {
-          document.getElementById("result").innerText = "❌ 요청 오류";
-          speak("요청 중 오류가 발생했습니다");
+          document.getElementById("barcode").value = "";
         });
     }
 
+    function handleSubmit() {
+      const barcode = document.getElementById("barcode").value.trim();
+      if (barcode) handleBarcode(barcode);
+    }
+
+    // ✅ 카메라 스캔 초기화
     const html5QrCode = new Html5Qrcode("reader");
+    const config = { fps: 10, qrbox: 250 };
+
     Html5Qrcode.getCameras().then(devices => {
       if (devices && devices.length) {
+        const cameraId = devices[0].id;
         html5QrCode.start(
-          { facingMode: "environment" },
-          { fps: 10, qrbox: 250 },
-          (decodedText) => {
-            handleScannedBarcode(decodedText);
+          cameraId,
+          config,
+          barcode => {
+            handleBarcode(barcode);
+            html5QrCode.pause(); // 중복 방지 일시정지
+            setTimeout(() => html5QrCode.resume(), 3000); // 3초 후 재개
           },
-          (errorMessage) => {
-            // 에러 무시
+          errorMessage => {
+            // 오류 메시지 무시 가능
           }
         );
       }
     }).catch(err => {
-      document.getElementById("result").innerText = "📷 카메라 접근 실패";
+      document.getElementById("result").innerText = "카메라 접근 실패: " + err;
     });
   </script>
 </body>
