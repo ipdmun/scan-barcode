@@ -39,7 +39,6 @@
     }
 
     function handleScannedBarcode(barcode) {
-      // 새 바코드면 초기화
       if (barcode !== lastScanned) {
         lastScanned = barcode;
         scanCount = 0;
@@ -52,10 +51,18 @@
         .then((res) => res.json())
         .then((data) => {
           const resultDiv = document.getElementById("result");
-          if (data.found) {
-            const text = `✅ ${data.center} 센터\n입고 예정일: ${data.date}\nSKU명: ${data.sku}\n납품수량: ${data.deliveryQty}개`;
+
+          if (data.found && data.matches.length > 0) {
+            let text = `✅ SKU명: ${data.sku}\n`;
+            text += data.matches.map(match =>
+              `📍 ${match.center} 센터\n📅 입고 예정일: ${match.date}\n📦 납품수량: ${match.qty}개\n`
+            ).join("\n");
+
             resultDiv.innerText = text;
-            speak(`${data.center} 센터, 입고 예정일 ${data.date}, SKU ${data.sku}, 납품수량 ${data.deliveryQty}개`);
+
+            // 첫 번째 항목만 음성으로 안내
+            const first = data.matches[0];
+            speak(`${first.center} 센터, 입고 예정일 ${first.date}, 납품수량 ${first.qty}개, 상품: ${data.sku}`);
           } else {
             resultDiv.innerText = "❌ 바코드 없음";
             speak("해당 바코드를 찾을 수 없습니다");
@@ -71,7 +78,7 @@
     Html5Qrcode.getCameras().then(devices => {
       if (devices && devices.length) {
         html5QrCode.start(
-          { facingMode: "environment" }, // 후면 카메라
+          { facingMode: "environment" },
           { fps: 10, qrbox: 250 },
           (decodedText) => {
             handleScannedBarcode(decodedText);
