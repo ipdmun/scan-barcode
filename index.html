@@ -47,7 +47,7 @@
       if (scanCount >= 2) return;
       scanCount++;
 
-      fetch(`https://script.google.com/macros/s/AKfycbzkMBIZkxl6jTMugWYUxDiiz9MP-L7RikCpNnnkjOeZ166jbTZhxdNgOPsLoeG7-jOT/exec?barcode=${barcode}`)
+      fetch(`https://script.google.com/macros/s/AKfycbwVTsUOx6pPdMXe_JLCff1CTvrpcbDbF_hN-ZcuBWvY0LnoVEAF5YLuZujNBsL3nlIz/exec?barcode=${barcode}`)
         .then((res) => res.json())
         .then((data) => {
           const resultDiv = document.getElementById("result");
