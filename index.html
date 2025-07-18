@@ -1,65 +1,76 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="UTF-8">
-  <title>입고 스캐너</title>
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-  <style>
-    body { font-family: sans-serif; text-align: center; padding: 2rem; }
-    input { font-size: 1.5rem; padding: 0.5rem; width: 80%; }
-    button { font-size: 1.2rem; padding: 0.5rem 1rem; margin-top: 1rem; }
-    #result { margin-top: 2rem; font-size: 1.3rem; white-space: pre-line; }
-    #reader { width: 100%; margin: auto; }
-  </style>
-</head>
-<body>
-  <h2>📦 입고 스캐너</h2>
-  <div id="reader"></div>
-  <input type="text" id="barcode" placeholder="바코드 입력 또는 스캔" autofocus />
-  <br />
-  <button onclick="handleSubmit()">입력</button>
-  <div id="result"></div>
+  <head>
+    <meta charset="UTF-8">
+    <title>Barcode Scanner</title>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <style>
+      body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+      #reader { width: 100%; max-width: 480px; margin: auto; }
+      #result { margin-top: 20px; font-size: 18px; }
+    </style>
+  </head>
+  <body>
+    <h2>바코드 스캐너</h2>
+    <div id="reader"></div>
+    <div id="result">바코드를 스캔하세요...</div>
 
-  <script>
-    // 카메라로 바코드 스캔
-    function onScanSuccess(decodedText) {
-      document.getElementById("barcode").value = decodedText;
-      handleSubmit();
-    }
+    <script>
+      const webAppUrl = "https://script.google.com/macros/s/AKfycbxvZLzjPZQaEMYv3RR_lF_lwNbxLxUNBqazuTSq2JVe38yaVg4Wdpcas8qtzcrPAh33/exec";
+      let spokenMap = {};
 
-    const html5QrcodeScanner = new Html5QrcodeScanner("reader", {
-      fps: 10,
-      qrbox: 250
-    });
-    html5QrcodeScanner.render(onScanSuccess);
+      function speak(text, barcode) {
+        if (!spokenMap[barcode]) spokenMap[barcode] = 0;
+        if (spokenMap[barcode] >= 2) return;
 
-    // 음성 안내
-    function speak(text) {
-      const msg = new SpeechSynthesisUtterance(text);
-      msg.lang = 'ko-KR';
-      speechSynthesis.speak(msg);
-    }
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'ko-KR';
+        speechSynthesis.speak(utterance);
+        spokenMap[barcode]++;
+      }
 
-    // 바코드 전송
-    function handleSubmit() {
-      const barcode = document.getElementById("barcode").value.trim();
-      if (!barcode) return;
+      function onScanSuccess(decodedText) {
+        document.getElementById('result').innerText = `스캔된 바코드: ${decodedText}`;
+        
+        fetch(`${webAppUrl}?barcode=${encodeURIComponent(decodedText)}`)
+          .then(response => response.json())
+          .then(data => {
+            if (data.found) {
+              const { center, date, sku, deliveryQty } = data;
+              const message = `입고 센터: ${center}. 입고 예정일: ${date}. 상품: ${sku}. 수량: ${deliveryQty}`;
+              speak(message, decodedText);
+            } else {
+              speak("등록되지 않은 바코드입니다.", decodedText);
+            }
+          })
+          .catch(() => {
+            speak("서버 오류가 발생했습니다.", decodedText);
+          });
+      }
 
-      fetch(`https://script.google.com/macros/s/AKfycbxvZLzjPZQaEMYv3RR_lF_lwNbxLxUNBqazuTSq2JVe38yaVg4Wdpcas8qtzcrPAh33/exec?barcode=${barcode}`)
-        .then(res => res.json())
-        .then(data => {
-          const resultDiv = document.getElementById("result");
-          if (data.found) {
-            const text = `✅ ${data.center} 센터\n입고 예정일: ${data.date}\nSKU명: ${data.sku}\n납품수량: ${data.deliveryQty}개`;
-            resultDiv.innerText = text;
-            speak(`${data.center} 센터, 입고 예정일 ${data.date}, SKU ${data.sku}, 납품수량 ${data.deliveryQty}개`);
-          } else {
-            resultDiv.innerText = `❌ 바코드 없음`;
-            speak("해당 바코드를 찾을 수 없습니다");
+      function startScanner() {
+        const html5Qrcode = new Html5Qrcode("reader");
+        const config = {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          experimentalFeatures: {
+            useBarCodeDetectorIfSupported: true
+          },
+          videoConstraints: {
+            facingMode: "environment" // 후면 카메라
           }
-          document.getElementById("barcode").value = "";
+        };
+
+        html5Qrcode.start(
+          { facingMode: "environment" },
+          config,
+          onScanSuccess
+        ).catch(err => {
+          document.getElementById('result').innerText = "카메라 접근 실패: " + err;
         });
-    }
-  </script>
-</body>
+      }
+
+      window.onload = startScanner;
+    </script>
+  </body>
 </html>
