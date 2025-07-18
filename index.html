@@ -1,81 +1,67 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="UTF-8" />
-  <title>입고 스캐너</title>
-  <script src="https://unpkg.com/html5-qrcode"></script>
-  <style>
-    body { font-family: sans-serif; text-align: center; padding: 1rem; }
-    #reader { width: 100%; max-width: 400px; margin: 0 auto; }
-    input, button { font-size: 1.2rem; padding: 0.5rem; width: 80%; margin-top: 1rem; }
-    #result { margin-top: 2rem; font-size: 1.2rem; white-space: pre-line; }
-  </style>
-</head>
-<body>
-  <h2>📦 입고 스캐너</h2>
-  <div id="reader"></div>
-  <input type="text" id="barcode" placeholder="바코드 수동 입력" />
-  <br />
-  <button onclick="handleSubmit()">입력</button>
-  <div id="result"></div>
+  <head>
+    <meta charset="UTF-8" />
+    <title>입고 스캐너</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+      body { font-family: sans-serif; text-align: center; padding: 1rem; }
+      #reader { width: 100%; max-width: 400px; margin: auto; }
+      #result { margin-top: 1rem; font-size: 1.1rem; white-space: pre-line; }
+    </style>
+  </head>
+  <body>
+    <h2>📦 입고 스캐너</h2>
+    <div id="reader"></div>
+    <div id="result">스캔 대기 중...</div>
 
-  <script>
-    let speakCount = 0;
+    <script>
+      let speakCount = 0;
+      let lastSpokenText = "";
 
-    function speak(text) {
-      if (speakCount >= 2) return;
-      const msg = new SpeechSynthesisUtterance(text);
-      msg.lang = 'ko-KR';
-      speechSynthesis.speak(msg);
-      speakCount++;
-    }
+      function speak(text) {
+        if (text === lastSpokenText && speakCount >= 2) return;
+        if (text !== lastSpokenText) {
+          lastSpokenText = text;
+          speakCount = 0;
+        }
+        const msg = new SpeechSynthesisUtterance(text);
+        msg.lang = 'ko-KR';
+        msg.onend = () => speakCount++;
+        speechSynthesis.speak(msg);
+      }
 
-    function handleBarcode(barcode) {
-      speakCount = 0;
-      fetch(`https://script.google.com/macros/s/AKfycby-FnENdO0xe3Sp9JtguVgchmvsnSmBe97rVe49QWildLiQ_APmmH4qEqHTgn0IqJmi/exec?barcode=${barcode}`)
-        .then(res => res.json())
-        .then(data => {
-          const resultDiv = document.getElementById("result");
-          if (data.found) {
-            const text = `✅ ${data.center} 센터\n입고 예정일: ${data.date}\nSKU명: ${data.sku}\n납품수량: ${data.deliveryQty}개`;
-            resultDiv.innerText = text;
-            speak(`${data.center} 센터, 입고 예정일 ${data.date}, SKU ${data.sku}, 납품수량 ${data.deliveryQty}개`);
-          } else {
-            resultDiv.innerText = "❌ 바코드 없음";
-            speak("해당 바코드를 찾을 수 없습니다");
-          }
-          document.getElementById("barcode").value = "";
-        });
-    }
+      function handleBarcode(barcode) {
+        fetch(`https://script.google.com/macros/s/AKfycby-FnENdO0xe3Sp9JtguVgchmvsnSmBe97rVe49QWildLiQ_APmmH4qEqHTgn0IqJmi/exec?barcode=${barcode}`)
+          .then(res => res.json())
+          .then(data => {
+            const resultDiv = document.getElementById("result");
+            if (data.found) {
+              const message = `✅ ${data.center} 센터\n입고 예정일: ${data.date}\nSKU명: ${data.sku}\n납품수량: ${data.deliveryQty}개`;
+              resultDiv.innerText = message;
+              speak(`${data.center} 센터, 입고 예정일 ${data.date}, SKU ${data.sku}, 납품수량 ${data.deliveryQty}개`);
+            } else {
+              resultDiv.innerText = "❌ 바코드 없음";
+              speak("해당 바코드를 찾을 수 없습니다");
+            }
+          });
+      }
 
-    function handleSubmit() {
-      const barcode = document.getElementById("barcode").value.trim();
-      if (barcode) handleBarcode(barcode);
-    }
+      const html5QrCode = new Html5Qrcode("reader");
+      const config = { fps: 10, qrbox: 250 };
 
-    // ✅ 카메라 스캔 초기화
-    const html5QrCode = new Html5Qrcode("reader");
-    const config = { fps: 10, qrbox: 250 };
-
-    Html5Qrcode.getCameras().then(devices => {
-      if (devices && devices.length) {
-        const cameraId = devices[0].id;
+      Html5Qrcode.getCameras().then(devices => {
+        const backCamera = devices.find(d => d.label.toLowerCase().includes('back')) || devices[0];
         html5QrCode.start(
-          cameraId,
+          { deviceId: { exact: backCamera.id } },
           config,
-          barcode => {
-            handleBarcode(barcode);
-            html5QrCode.pause(); // 중복 방지 일시정지
-            setTimeout(() => html5QrCode.resume(), 3000); // 3초 후 재개
-          },
-          errorMessage => {
-            // 오류 메시지 무시 가능
+          (decodedText) => {
+            handleBarcode(decodedText);
           }
         );
-      }
-    }).catch(err => {
-      document.getElementById("result").innerText = "카메라 접근 실패: " + err;
-    });
-  </script>
-</body>
+      }).catch(err => {
+        document.getElementById("result").innerText = `❌ 카메라 접근 오류: ${err}`;
+      });
+    </script>
+  </body>
 </html>
